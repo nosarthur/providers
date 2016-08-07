@@ -35,8 +35,8 @@ def impute_error(df, is_plot=False):
                     alpha=0.6, label='71 null', zorder=3) 	
 
         plt.legend(loc='upper left')
-        #sns.plt.show()
         sns.plt.savefig('impute_error.png', bbox_inches='tight')
+        #sns.plt.show()
 
 def plot_labelled_columns(df, cols, labels, axes, ms='os', 
             cs=['orange', 'blue'], with_title=False, with_xlabel=False):
@@ -101,6 +101,7 @@ def explore_features(df):
     ax = by_mType.plot(kind='barh', stacked=True)
     ax.set(xlabel='Provider count', ylabel='MRI.machine.type')
     sns.plt.savefig('by_mType.png', bbox_inches='tight')
+    plt.clf()
 
 def plot_by_type(df, scanners):
     tmp = pd.merge(scanners[['Provider.ID', ]], df[['label']], left_on='Provider.ID', right_index=True)
@@ -114,14 +115,16 @@ def plot_by_type(df, scanners):
 def plot_ROC(y_true, y_score):
     fpr, tpr, thresh = roc_curve(y_true=y_true, y_score=y_score)
     roc_auc = auc(x=fpr, y=tpr)
-    fig2 = plt.figure()
-    plt.plot(fpr, tpr, label='auc = %0.2f'%roc_auc) 
-    plt.plot([0,1],[0,1],linestyle='--', c='gray', linewidth=2)
-    plt.legend(loc='best')
+    plt.plot(fpr, tpr, label='Full data ROC (area = %0.2f)'%roc_auc) 
+    plt.plot([0,1],[0,1],linestyle='--', c='gray', lw=2)
     plt.xlabel('false positive rate')
     plt.ylabel('true positive rate')
+    plt.xlim([-0.05, 1.05])
+    plt.ylim([-0.05, 1.05])
     plt.title('Receiver Operator Characteristic')
+    plt.legend(loc="lower right")
     sns.plt.savefig('ROC.png', bbox_inches='tight')
+    plt.clf()
 #plt.show()
 
 
@@ -149,5 +152,7 @@ def plot_feature_importances(importances):
     plt.title('Feature Importances')
     #plt.show()
     sns.plt.savefig('feature_importance.png', bbox_inches='tight')
+    plt.clf()
+
 
 
