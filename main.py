@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -34,12 +35,13 @@ score = tmp['RadPeer.w.Significance.Score'].apply(utils.extract_ab)
 exams.loc[(score=='a').index, 'RadPeer.Significance.of.Errors'] = 0
 exams.loc[(score=='b').index, 'RadPeer.Significance.of.Errors'] = 1
 
-# average reviews for the same exam
+# drop non-review related features
 columns = ['Exam.Quality.Reviewer.ID', 'RadPeer.w.Significance.Score',
            'Patient.Sex', 'Patient.Age', 'study_body_part', 
            'MSK.or.Spine']
 exams.drop(columns, axis=1, inplace=True)
 
+# average reviews for the same exam
 exams = exams.groupby(['Exam.ID', 'Provider.ID']).agg('mean')
 exams['Percent.Error'] = exams['Total.Diagnostic.Errors'] \
               / (exams['Total.Diagnostic.Errors']
@@ -66,21 +68,22 @@ features = summary[columns]
 mms = MinMaxScaler()
 X = mms.fit_transform(features)
 
+# set up clustering algorithms
 db = DBSCAN(eps=0.3, min_samples=5)
 ac = AgglomerativeClustering(n_clusters=2, affinity='euclidean',
                              linkage='average')
-km = MiniBatchKMeans(n_clusters=2, random_state=1, n_init=15)
+#km = MiniBatchKMeans(n_clusters=2, random_state=1, n_init=15)
 bc = Birch(n_clusters=2)
 #sp = SpectralClustering(n_clusters=2, eigen_solver='arpack', random_state=1) 
 #bandwidth = estimate_bandwidth(X, quantile=0.3)
 #ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
 #ap= AffinityPropagation(damping=.9, preference=-200)
 
-y_km = km.fit_predict(X)
+#y_km = km.fit_predict(X)
 y_ac = ac.fit_predict(X)
 utils.swap_label(y_ac)
-#y_bc = bc.fit_predict(X)
-#utils.swap_label(y_bc)
+y_bc = bc.fit_predict(X)
+utils.swap_label(y_bc)
 y_db = db.fit_predict(X)
 y_db[y_db==-1] = 1
 #print np.unique(y_db)
@@ -89,10 +92,11 @@ y_db[y_db==-1] = 1
 #y_ap = ap.fit_predict(X)
 
 labels = {'AgglomerativeClustering':y_ac}
-labels['MiniBatchKMeans'] = y_km 
+#labels['MiniBatchKMeans'] = y_km 
 labels['DBSCAN'] = y_db
-#labels['Birch'] = y_bc
+labels['Birch'] = y_bc
 
+# make plot about the clustering results
 fig, axes = plt.subplots(3,len(labels), figsize=(17,10))
 for key, value in labels.items():
     print("Silhouette Coefficient of %s: %0.3f"
@@ -113,7 +117,7 @@ plt.clf()
 #print(features.columns.tolist())
 #utils.plot_dendr_heat(features, labels)
 
-# add labels column
+# add class labels column
 features = features.assign(label=y_ac)
 
 ''' ------- Task 3: prediction of "care quality" ------- '''
@@ -121,9 +125,9 @@ features = features.assign(label=y_ac)
 # add features from scanner specs
 gp = scanners.groupby('Provider.ID')
 new_f = gp['MRI.magnet.strength'].agg([('B0.max','max'), 
-                                ('B0.min','min'), 
-                                #('B0.avg','mean'), 
-                                ('scanner.count','size')])
+                                       ('B0.min','min'), 
+                                       #('B0.avg','mean'), 
+                                       ('scanner.count','size')])
 d = {'Closed':'C', 'Semi-Open Wide Bore':'W', 'Open':'O',
      'Stand-Up':'S', 'Extremity':'E'}  # shorten the name string
 # add up the name strings if the provider has more than 1 scanner
@@ -133,7 +137,7 @@ mType = gp[['MRI.machine.type']].agg(lambda s: s.apply(lambda x: d[x]).sum())
 df = pd.merge(new_f, specs, right_on='Provider.ID', left_index=True) 
 df = pd.merge(mType, df, right_on='Provider.ID', left_index=True) 
 df = pd.merge(features[['label']], df, right_on='Provider.ID',
-              left_index=True)
+                                       left_index=True)
 df.set_index('Provider.ID', inplace=True)
 
 # plot provider 'goodness' WRT individual features 
@@ -177,7 +181,7 @@ plt.plot(mean_fpr, mean_tpr, 'r-',
 #scores = cross_val_score(clf, X, Y, cv=3, scoring='f1')
 #print('CV accuracy: %.3f +/- %.3f' % (scores.mean(), scores.std()))
 
-# fit full dataset to get ROC
+# also fit full dataset to get ROC
 clf.fit(X, Y)
 
 y_pred = clf.predict_proba(df[predictors])[:,1]
@@ -189,10 +193,10 @@ df = df.assign(predicted_label=yy)
 check = df[['predicted_label']]
 full_res = pd.merge(check, features, left_index=True, right_index=True)
 
-# feature importance from impurity
+# compute feature importance from impurity
 utils.plot_feature_importances(clf.feature_importances_)
 
-# feature importance from accuracy
+# compute feature importance from accuracy
 # the idea is to permute the values of each feature and see its impact on the accuracy
 scores = defaultdict(list)
 
@@ -201,11 +205,11 @@ for train_idx, test_idx in ShuffleSplit(len(df), n_iter=10, test_size=0.3,
     X_train, X_test = X[train_idx], X[test_idx]
     Y_train, Y_test = Y[train_idx], Y[test_idx]
     clf.fit(X_train, Y_train)
-    acc = roc_auc(Y_test, clf.predict(X_test))
+    acc = roc_auc_score(Y_test, clf.predict(X_test))
     for i in range(len(predictors)):
         X_t = X_test.copy()
         np.random.shuffle(X_t[:,i])
-        shuff_acc = roc_auc(Y_test, clf.predict(X_t))
+        shuff_acc = roc_auc_score(Y_test, clf.predict(X_t))
         scores[predictors[i]].append((acc-shuff_acc)/acc)
 print "Features sorted by their score:"
 print sorted([(round(np.mean(score), 3), feat) for

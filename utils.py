@@ -114,6 +114,7 @@ def plot_by_type(df, scanners):
 
 def plot_ROC(y_true, y_score):
     fpr, tpr, thresh = roc_curve(y_true=y_true, y_score=y_score)
+    tpr[0] = 0.0
     roc_auc = auc(x=fpr, y=tpr)
     plt.plot(fpr, tpr, label='Full data ROC (area = %0.2f)'%roc_auc) 
     plt.plot([0,1],[0,1],linestyle='--', c='gray', lw=2)
@@ -126,7 +127,6 @@ def plot_ROC(y_true, y_score):
     sns.plt.savefig('ROC.png', bbox_inches='tight')
     plt.clf()
 #plt.show()
-
 
 def plot_feature_importances(importances):
 
